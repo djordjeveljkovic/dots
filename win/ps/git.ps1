@@ -26,6 +26,15 @@ function gpr {
     gh pr create --base $BaseBranch
 }
 
+# Git push to origin or specified remote and branch
+function gpo {
+    param(
+        [string]$Origin = "origin",  # Default remote is 'origin'
+        [string]$Branch = $(git rev-parse --abbrev-ref HEAD)  # Default branch is the current branch
+    )
+    git push $Origin $Branch
+}
+
 # Git commit with a message
 function gca {
     param(
