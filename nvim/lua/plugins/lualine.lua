@@ -3,36 +3,58 @@ return {
     "nvim-lualine/lualine.nvim",
     event = "VeryLazy",
     config = function()
+      local lualine = require("lualine")
       local harpoon = require("harpoon.mark")
+      local catppuccin = require("catppuccin.palettes").get_palette("frappe")
 
+      -- Utility function to truncate branch name
       local function truncate_branch_name(branch)
-        if not branch or branch == "" then
-          return ""
-        end
-
-        return branch
+        return branch or ""
       end
 
+      -- Harpoon component for displaying current mark and total marks
       local function harpoon_component()
         local total_marks = harpoon.get_length()
-
         if total_marks == 0 then
           return ""
         end
 
-        local current_mark = "—"
-
         local mark_idx = harpoon.get_current_index()
-        if mark_idx ~= nil then
-          current_mark = tostring(mark_idx)
-        end
+        local current_mark = mark_idx and tostring(mark_idx) or "—"
 
         return string.format("󱡅 %s/%d", current_mark, total_marks)
       end
 
-      require("lualine").setup({
+      -- Custom Catppuccin colors for Lualine
+      local custom_catppuccin_theme = {
+        normal = {
+          a = { fg = catppuccin.text, bg = catppuccin.mauve, gui = "bold" },
+          b = { fg = catppuccin.text, bg = catppuccin.surface0 },
+          c = { fg = catppuccin.text, bg = catppuccin.surface1 },
+        },
+        insert = {
+          a = { fg = catppuccin.text, bg = catppuccin.green, gui = "bold" },
+        },
+        visual = {
+          a = { fg = catppuccin.text, bg = catppuccin.peach, gui = "bold" },
+        },
+        replace = {
+          a = { fg = catppuccin.text, bg = catppuccin.red, gui = "bold" },
+        },
+        command = {
+          a = { fg = catppuccin.text, bg = catppuccin.blue, gui = "bold" },
+        },
+        inactive = {
+          a = { fg = catppuccin.overlay1, bg = catppuccin.surface1 },
+          b = { fg = catppuccin.overlay1, bg = catppuccin.surface1 },
+          c = { fg = catppuccin.overlay1, bg = catppuccin.surface0 },
+        },
+      }
+
+      -- Lualine configuration
+      lualine.setup({
         options = {
-          theme = "gruvbox",
+          theme = custom_catppuccin_theme,
           globalstatus = true,
           component_separators = { left = ":|:", right = ":|:" },
           section_separators = { left = "█", right = "█" },
@@ -55,3 +77,4 @@ return {
     end,
   },
 }
+
