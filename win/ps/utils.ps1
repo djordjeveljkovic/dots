@@ -8,11 +8,6 @@ function pnv {
     cd ~\AppData\Local\nvim
 }
 
-# Open the dots directory
-function shk {
-   echo "hellow"
-}
-
 # Source the PowerShell profile
 function source {
     . $PROFILE
