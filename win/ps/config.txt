@@ -1,0 +1,21 @@
+# Define dots directory
+$dots = "~\Documents\dots"
+
+Register-ArgumentCompleter -Native -CommandName dots -ScriptBlock {
+    param($commandName, $parameterName, $wordToComplete, $commandAst, $fakeBoundParameter)
+
+    # Suggest directories under the dots directory
+    $basePath = "$HOME\Documents\dots"
+    Get-ChildItem -Directory -Path $basePath | ForEach-Object {
+        [System.Management.Automation.CompletionResult]::new($_.FullName, $_.Name, 'Directory', "Dots subdirectory: $_.Name")
+    }
+}
+
+# Source all PowerShell scripts (*.ps1) in the specified directory
+Get-ChildItem -Path "$dots\win\ps\" -Filter "*.ps1" | ForEach-Object {
+    . $_.FullName
+}
+
+# Initialize oh-my-posh with the desired theme
+oh-my-posh init pwsh --config "$dots\win\ohmyposh\catppuccin_frappe.omp.json" | Invoke-Expression
+
