@@ -56,7 +56,7 @@ function gb {
     )
 
     if (-not $Branch) {
-        Write-Host "Usage: gb 'branch name'" -ForegroundColor Yellow
+        git branch
         return
     }
 
