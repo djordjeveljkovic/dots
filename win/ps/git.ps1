@@ -74,12 +74,11 @@ function gb {
 # Git branches remove all branches or one 
 function grmb {
     param (
-        [string]$b = '',      # Branch name (optional)
-        [switch]$d,           # Safe delete flag (optional)
-        [switch]$D            # Force delete flag (optional)
+        [string]$b = '',    # Branch name (optional)
+        [switch]$d          # Switch: If specified, treat as force delete (-D)
     )
-    # Determine the delete type based on the switch
-    $DeleteType = if ($D) { '-D' } elseif ($d) { '-d' } else { '-d' }
+    # Determine the delete type
+    $DeleteType = if ($d) { '-D' } else { '-d' }
 
     # Fetch and prune stale branches
     git fetch --prune
@@ -99,3 +98,4 @@ function grmb {
         git branch $DeleteType $b
     }
 }
+
