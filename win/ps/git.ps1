@@ -71,4 +71,31 @@ function gb {
         git checkout $Branch
     }
 }
+# Git branches remove all branches or one 
+function grmb {
+    param (
+        [string]$b = '',      # Branch name (optional)
+        [switch]$d,           # Safe delete flag (optional)
+        [switch]$D            # Force delete flag (optional)
+    )
+    # Determine the delete type based on the switch
+    $DeleteType = if ($D) { '-D' } elseif ($d) { '-d' } else { '-d' }
 
+    # Fetch and prune stale branches
+    git fetch --prune
+
+    if ($b -eq '') {
+        # Delete all stale branches
+        git branch -vv | ForEach-Object {
+            if ($_ -match '.*\[gone\].*') {
+                $branch = ($_ -split '\s+')[1]
+                Write-Host "Deleting local branch $branch with $DeleteType" -ForegroundColor Yellow
+                git branch $DeleteType $branch
+            }
+        }
+    } else {
+        # Delete the specified branch
+        Write-Host "Deleting specified branch $b with $DeleteType" -ForegroundColor Yellow
+        git branch $DeleteType $b
+    }
+}
