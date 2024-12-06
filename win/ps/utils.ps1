@@ -12,3 +12,13 @@ function pnv {
 function source {
     . $PROFILE
 }
+
+function sa {
+    cd ~\Documents\sainc\analytics
+}
+
+function sap {
+    cd ~\Documents\sainc\analytics-api
+}
+
+
