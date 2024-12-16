@@ -1,0 +1,17 @@
+[colors.primary]
+foreground = '#ebdbb2'
+
+[font]
+size = 12
+
+[font.normal]
+family = "UbuntuMono Nerd Font"
+
+[window]
+decorations = "none"
+dynamic_padding = true
+opacity = 0.5
+
+[window.padding]
+x = 10
+y = 3
