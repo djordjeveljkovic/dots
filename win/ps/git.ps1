@@ -56,7 +56,7 @@ function gb {
     )
 
     if (-not $Branch) {
-        git branch
+        git branch -vv
         return
     }
 
@@ -72,7 +72,7 @@ function gb {
     }
 }
 # Git branches remove all branches or one 
-function grmb {
+function gbr {
     param (
         [string]$b = '',    # Branch name (optional)
         [switch]$d          # Switch: If specified, treat as force delete (-D)
@@ -86,7 +86,7 @@ function grmb {
     if ($b -eq '') {
         # Delete all local branches not present on the remote
         git branch -v | ForEach-Object {
-            if ($_ -match '.*\[gone\].*') {
+            if ($_ -notmatch '\[.*\]') {
                 $branch = ($_ -split '\s+')[1]
                 Write-Host "Deleting local branch $branch with $DeleteType" -ForegroundColor Yellow
                 git branch $DeleteType $branch

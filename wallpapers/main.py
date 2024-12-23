@@ -157,7 +157,7 @@ class WallpaperCreator:
                 if img_obj == self.selected_image:
                     new_width = int(self.resize_width_entry.get())
                     new_height = int(self.resize_height_entry.get())
-                    resized_img = img.resize((new_width, new_height), Image.ANTIALIAS)
+                    resized_img = img.resize((new_width, new_height))
 
                     # Convert resized image to tkinter format and update canvas
                     img_tk_resized = ImageTk.PhotoImage(resized_img)

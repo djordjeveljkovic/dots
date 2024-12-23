@@ -23,6 +23,7 @@ return {
         automatic_installation = { exclude = { "gleam" } },
       })
 
+      require("biome").setup()
       -- Use Neodev for better Lua development
       require("neodev").setup()
 
@@ -102,7 +103,7 @@ return {
         solidity = {},
         sqlls = {},
         tailwindcss = {},
-        ts_ls = { -- Replace tsserver with ts_ls
+        ts_ls = {
           settings = {
             experimental = { enableProjectDiagnostics = true },
           },
