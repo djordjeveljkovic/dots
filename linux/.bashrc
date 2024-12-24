@@ -9,6 +9,10 @@ alias sk='killall ssh-agent && source ~/.zshrc'
 alias t='tmux'
 alias e='exit'
 alias syu='sudo pacman -Syu'
+alias cls='clear'
+
+alias bat='cat /sys/class/power_supply/BAT0/capacity'
+alias grep='grep --color=auto'
 
 # git
 alias gp='git pull'
@@ -24,3 +28,5 @@ export EDITOR=nvim
 alias fp="fzf --preview 'bat --style=numbers --color=always --line-range :500 {}'"
 # search for a file with fzf and open it in vim
 alias vf='v $(fp)'
+
+[ "$(tty)" = "/dev/tty1" ] && exec Hyprland
