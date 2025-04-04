@@ -5,7 +5,6 @@ return {
     config = function()
       local lualine = require("lualine")
       local harpoon = require("harpoon.mark")
-      local catppuccin = require("catppuccin.palettes").get_palette("frappe")
 
       -- Utility function to truncate branch name
       local function truncate_branch_name(branch)
@@ -25,36 +24,9 @@ return {
         return string.format("󱡅 %s/%d", current_mark, total_marks)
       end
 
-      -- Custom Catppuccin colors for Lualine
-      local custom_catppuccin_theme = {
-        normal = {
-          a = { fg = catppuccin.text, bg = catppuccin.mauve, gui = "bold" },
-          b = { fg = catppuccin.text, bg = catppuccin.surface0 },
-          c = { fg = catppuccin.text, bg = catppuccin.surface1 },
-        },
-        insert = {
-          a = { fg = catppuccin.text, bg = catppuccin.green, gui = "bold" },
-        },
-        visual = {
-          a = { fg = catppuccin.text, bg = catppuccin.peach, gui = "bold" },
-        },
-        replace = {
-          a = { fg = catppuccin.text, bg = catppuccin.red, gui = "bold" },
-        },
-        command = {
-          a = { fg = catppuccin.text, bg = catppuccin.blue, gui = "bold" },
-        },
-        inactive = {
-          a = { fg = catppuccin.overlay1, bg = catppuccin.surface1 },
-          b = { fg = catppuccin.overlay1, bg = catppuccin.surface1 },
-          c = { fg = catppuccin.overlay1, bg = catppuccin.surface0 },
-        },
-      }
-
       -- Lualine configuration
       lualine.setup({
         options = {
-          theme = custom_catppuccin_theme,
           globalstatus = true,
           component_separators = { left = ":|:", right = ":|:" },
           section_separators = { left = "█", right = "█" },

@@ -8,22 +8,10 @@ return {
         "nvim-telescope/telescope-fzf-native.nvim",
         build = "cmake -S. -Bbuild -DCMAKE_BUILD_TYPE=Release && cmake --build build --config Release && cmake --install build --prefix build",
         cond = vim.fn.executable("cmake") == 1,
-      },
-      "catppuccin/nvim", -- Add Catppuccin as a dependency
+      }
     },
     opts = function()
       local actions = require("telescope.actions")
-      local theme = require("catppuccin.palettes").get_palette("frappe")
-
-      -- Apply Catppuccin Frappe highlights
-      vim.api.nvim_set_hl(0, "TelescopeNormal", { bg = theme.surface0, fg = theme.text })
-      vim.api.nvim_set_hl(0, "TelescopeBorder", { bg = theme.surface0, fg = theme.surface2 })
-      vim.api.nvim_set_hl(0, "TelescopePromptNormal", { bg = theme.surface1, fg = theme.text })
-      vim.api.nvim_set_hl(0, "TelescopePromptBorder", { bg = theme.surface1, fg = theme.surface2 })
-      vim.api.nvim_set_hl(0, "TelescopeResultsNormal", { bg = theme.surface0, fg = theme.text })
-      vim.api.nvim_set_hl(0, "TelescopeResultsBorder", { bg = theme.surface0, fg = theme.surface2 })
-      vim.api.nvim_set_hl(0, "TelescopePreviewNormal", { bg = theme.surface0, fg = theme.text })
-      vim.api.nvim_set_hl(0, "TelescopePreviewBorder", { bg = theme.surface0, fg = theme.surface2 })
 
       return {
         defaults = {

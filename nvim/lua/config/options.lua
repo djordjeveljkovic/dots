@@ -39,9 +39,6 @@ vim.opt.smartcase = true
 -- Decrease updatetime to 200ms
 vim.opt.updatetime = 50
 
--- Set completeopt to have a better completion experience
-vim.opt.completeopt = { "menuone", "noselect" }
-
 -- Enable persistent undo history
 vim.opt.undofile = true
 
@@ -61,8 +58,6 @@ vim.opt.wildmode = "longest:full,full" -- complete the longest common match, and
 vim.opt.completeopt = "menuone,longest,preview"
 
 vim.opt.list = true -- enable the below listchars
-vim.opt.listchars = { tab = "▸ ", trail = "·" }
-vim.opt.fillchars:append({ eob = " " }) -- remove the ~ from end of buffer
 -- Set fold settings
 -- These options were reccommended by nvim-ufo
 -- See: https://github.com/kevinhwang91/nvim-ufo#minimal-configuration
@@ -80,12 +75,3 @@ vim.opt.scrolloff = 8
 vim.opt.undofile = true -- persistent undo
 vim.opt.backup = true -- automatically save a backup file
 vim.opt.backupdir:remove(".") -- keep backups out of the current directory
-
-vim.opt.guicursor = {
-	"n-v-c:block", -- Normal, visual, command-line: block cursor
-	"i-ci-ve:ver25", -- Insert, command-line insert, visual-exclude: vertical bar cursor with 25% width
-	"r-cr:hor20", -- Replace, command-line replace: horizontal bar cursor with 20% height
-	"o:hor50", -- Operator-pending: horizontal bar cursor with 50% height
-	"a:blinkwait700-blinkoff400-blinkon250", -- All modes: blinking settings
-	"sm:block-blinkwait175-blinkoff150-blinkon175", -- Showmatch: block cursor with specific blinking settings
-}
