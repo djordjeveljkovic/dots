@@ -10,8 +10,13 @@ family = "UbuntuMono Nerd Font"
 [window]
 decorations = "none"
 dynamic_padding = true
-opacity = 0.5
+opacity = 0.94
 
 [window.padding]
 x = 10
 y = 3
+
+[terminal.shell]
+program = "nu"
+[general]
+working_directory = "C:/Users/usr/Documents"
