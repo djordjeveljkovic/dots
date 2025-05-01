@@ -1,0 +1,40 @@
+# Catppuccin Frappé Theme for Alacritty
+# Source: Official Catppuccin Alacritty Port
+
+[colors]
+# Default colors
+[colors.primary]
+background = '#303446' # base
+foreground = '#c6d0f5' # text
+
+# Cursor colors
+[colors.cursor]
+text = '#303446'       # base
+cursor = '#f2d5cf'     # rosewater
+
+# Selection colors
+[colors.selection]
+text = '#c6d0f5'       # text
+background = '#626880' # surface1
+
+# Normal colors
+[colors.normal]
+black = '#51576d'      # surface0
+red = '#e78284'        # red
+green = '#a6d189'      # green
+yellow = '#e5c890'     # yellow
+blue = '#8caaee'       # blue
+magenta = '#f4b8e4'    # pink
+cyan = '#81c8be'       # teal
+white = '#b5bfe2'      # subtext0
+
+# Bright colors
+[colors.bright]
+black = '#626880'      # surface1
+red = '#e78284'        # red
+green = '#a6d189'      # green
+yellow = '#e5c890'     # yellow
+blue = '#8caaee'       # blue
+magenta = '#f4b8e4'    # pink
+cyan = '#81c8be'       # teal
+white = '#a5adce'      # subtext1

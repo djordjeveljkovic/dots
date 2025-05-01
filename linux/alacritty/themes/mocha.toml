@@ -1,0 +1,40 @@
+# Catppuccin Mocha Theme for Alacritty
+# Source: Official Catppuccin Alacritty Port
+
+[colors]
+# Default colors
+[colors.primary]
+background = '#1e1e2e' # base
+foreground = '#cdd6f4' # text
+
+# Cursor colors
+[colors.cursor]
+text = '#1e1e2e'       # base
+cursor = '#f5e0dc'     # rosewater
+
+# Selection colors
+[colors.selection]
+text = '#cdd6f4'       # text
+background = '#585b70' # surface1
+
+# Normal colors
+[colors.normal]
+black = '#45475a'      # surface0
+red = '#f38ba8'        # red
+green = '#a6e3a1'      # green
+yellow = '#f9e2af'     # yellow
+blue = '#89b4fa'       # blue
+magenta = '#f5c2e7'    # pink
+cyan = '#94e2d5'       # teal
+white = '#bac2de'      # subtext0
+
+# Bright colors
+[colors.bright]
+black = '#585b70'      # surface1
+red = '#f38ba8'        # red
+green = '#a6e3a1'      # green
+yellow = '#f9e2af'     # yellow
+blue = '#89b4fa'       # blue
+magenta = '#f5c2e7'    # pink
+cyan = '#94e2d5'       # teal
+white = '#a6adc8'      # subtext1

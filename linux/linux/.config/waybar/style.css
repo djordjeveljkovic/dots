@@ -1,0 +1,122 @@
+/* =========================
+   Theme Definitions
+   ========================= */
+
+@import url("themes/active.css");
+
+/* =========================
+   Base Styles
+   ========================= */
+
+* {
+  border: none;
+  border-radius: 0;
+  font-family: "RobotoMono Nerd Font";
+  font-size: 14px;
+  font-weight: 500;
+}
+
+window#waybar {
+  background-color: @base_bg;
+  color: @base_fg;
+  transition: background-color 0.5s;
+  border-bottom: 0px solid @subtle_bg;
+}
+
+window#waybar.hidden {
+  opacity: 0.2;
+}
+
+#workspaces button {
+  padding: 0 5px;
+  color: @base_fg;
+  border-radius: 5px;
+}
+
+#workspaces button.focused {
+  background-color: @base_fg;
+  color: @base_bg;
+}
+
+#workspaces button.urgent {
+  background-color: @accent_color;
+}
+
+widget > * {
+  margin-top: 6px;
+  margin-bottom: 6px;
+}
+
+.modules-left > widget > * {
+  margin-left: 12px;
+  margin-right: 12px;
+}
+
+.modules-left > widget:first-child > * {
+  margin-left: 6px;
+}
+
+.modules-left > widget:last-child > * {
+  margin-right: 18px;
+}
+
+.modules-right > widget > * {
+  padding: 0 12px;
+  margin-left: 0;
+  margin-right: 0;
+  color: @base_bg;
+  background-color: @base_fg;
+}
+
+.modules-right > widget:first-child > * {
+  border-radius: 5px 0 0 5px;
+}
+
+.modules-right > widget:last-child > * {
+  border-radius: 0 5px 5px 0;
+  margin-right: 6px;
+}
+
+#mode {
+  background: transparent;
+  color: @accent_color_bright;
+}
+
+/* Battery Critical Blink */
+@keyframes blink {
+  to {
+    color: @base_fg;
+  }
+}
+
+#battery.critical:not(.charging) {
+  animation-name: blink;
+  animation-duration: 1s;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+  animation-direction: alternate;
+}
+
+label:focus {
+  background-color: @base_bg;
+}
+
+/* Tooltip Styling */
+tooltip {
+  border-radius: 5px;
+  background: @tooltip_bg;
+}
+
+tooltip label {
+  color: @base_fg;
+}
+
+tooltip calendar {
+  font-family: "JetBrainsMono Nerd Font", monospace;
+  font-size: 12px;
+}
+
+tooltip calendar .today {
+  color: @accent_color;
+  font-weight: bold;
+}

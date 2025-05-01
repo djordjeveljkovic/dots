@@ -1,0 +1,7 @@
+/* Gruvbox Theme Colors */
+@define-color base_bg #282828;
+@define-color base_fg #ebdbb2;
+@define-color accent_color #cc241d;
+@define-color accent_color_bright #fb4934;
+@define-color subtle_bg #3c3836;
+@define-color tooltip_bg #504945;

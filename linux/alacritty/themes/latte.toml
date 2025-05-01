@@ -1,0 +1,40 @@
+# Catppuccin Latte Theme for Alacritty
+# Source: Official Catppuccin Alacritty Port
+
+[colors]
+# Default colors
+[colors.primary]
+background = '#eff1f5' # base
+foreground = '#4c4f69' # text
+
+# Cursor colors
+[colors.cursor]
+text = '#eff1f5'       # base
+cursor = '#dc8a78'     # rosewater
+
+# Selection colors
+[colors.selection]
+text = '#4c4f69'       # text
+background = '#acb0be' # subtext0
+
+# Normal colors
+[colors.normal]
+black = '#5c5f77'      # subtext1
+red = '#d20f39'        # red
+green = '#40a02b'      # green
+yellow = '#df8e1d'     # yellow
+blue = '#1e66f5'       # blue
+magenta = '#ea76cb'    # pink
+cyan = '#179299'       # teal
+white = '#acb0be'      # subtext0
+
+# Bright colors
+[colors.bright]
+black = '#6c6f85'      # surface2
+red = '#d20f39'        # red
+green = '#40a02b'      # green
+yellow = '#df8e1d'     # yellow
+blue = '#1e66f5'       # blue
+magenta = '#ea76cb'    # pink
+cyan = '#179299'       # teal
+white = '#bcc0cc'      # surface1

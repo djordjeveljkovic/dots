@@ -1,0 +1,40 @@
+# Catppuccin Macchiato Theme for Alacritty
+# Source: Official Catppuccin Alacritty Port
+
+[colors]
+# Default colors
+[colors.primary]
+background = '#24273a' # base
+foreground = '#cad3f5' # text
+
+# Cursor colors
+[colors.cursor]
+text = '#24273a'       # base
+cursor = '#f4dbd6'     # rosewater
+
+# Selection colors
+[colors.selection]
+text = '#cad3f5'       # text
+background = '#5b6078' # surface1
+
+# Normal colors
+[colors.normal]
+black = '#494d64'      # surface0
+red = '#ed8796'        # red
+green = '#a6da95'      # green
+yellow = '#eed49f'     # yellow
+blue = '#8aadf4'       # blue
+magenta = '#f5bde6'    # pink
+cyan = '#8bd5ca'       # teal
+white = '#b8c0e0'      # subtext0
+
+# Bright colors
+[colors.bright]
+black = '#5b6078'      # surface1
+red = '#ed8796'        # red
+green = '#a6da95'      # green
+yellow = '#eed49f'     # yellow
+blue = '#8aadf4'       # blue
+magenta = '#f5bde6'    # pink
+cyan = '#8bd5ca'       # teal
+white = '#a5adcb'      # subtext1

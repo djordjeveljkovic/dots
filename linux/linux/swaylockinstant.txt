@@ -1,0 +1,15 @@
+steps 
+
+sudo groupadd --system autologin
+sudo usermod -a -G autologin your_username
+sudo -E systemctl edit getty@tty1.service
+
+[Service]
+# Clear default ExecStart setting
+ExecStart=
+# Add new ExecStart with autologin option for your user
+ExecStart=-/sbin/agetty --autologin your_username --noclear %I $TERM
+
+
+
+

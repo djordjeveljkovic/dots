@@ -1,0 +1,36 @@
+# battery related packages
+sp tlp smartmontools laptop-mode-tools powertop ethtool
+systemctl enable tlp.service
+
+# alacritty image drawer
+sp ueberzugpp
+
+# apps
+sp imagemagick 7zip gimp yazi alacritty git feh qbittorrent unzip tmux unzip
+yay -S google-chrome
+
+#utilities
+sp bluez bluez-utils brightnessctl grim mpv skim slurp make
+
+#nvim 
+sp neovim cmake go lazygit sed fzf nodejs npm openssh stylua ripgrep
+
+# php
+sp composer 
+
+# sway 
+sp sway swaybg swayidle swaylock swaync waybar wayland-protocols wl-clipboard
+
+# fonts
+sp ttf-ubuntu-nerd ttf-dejavu-nerd ttf-firacode-nerd
+
+# zsh 
+sp zsh
+sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)"
+chsh -s $(which zsh)
+yay -S --noconfirm zsh-theme-powerlevel10k-git
+
+# yay
+git clone https://aur.archlinux.org/yay.git
+cd yay
+makepkg -si

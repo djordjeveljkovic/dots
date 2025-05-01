@@ -1,0 +1,42 @@
+alias la="ls -al --group-directories-first"
+alias ll="ls -althr --group-directories-first"
+alias ..="cd .."
+alias sp="sudo pacman -S"
+alias sss="sudo pacman -Ss"
+alias rp="sudo pacman -Rs"
+alias g=google-chrome-stable
+alias sv='sudoedit'
+alias sk='killall ssh-agent && source ~/.zshrc'
+alias e='exit'
+alias syu='sudo pacman -Syu'
+alias cls="printf '\033[2J\033[3J\033[1;1H'"
+
+alias snv="sudo -E nvim"
+
+alias makegrub="sudo grub-mkconfig -o /boot/grub/grub.cfg"
+
+alias bat='cat /sys/class/power_supply/BAT0/capacity'
+alias grep='grep --color=auto'
+
+alias t='tmux'
+alias ts='tmux new -s'
+alias ta='tmux attach -t'
+alias tk='tmux kill-session -t'
+alias tka='tmux ls -F "#{session_name}" | xargs -I % tmux kill-session -t %'
+alias tls='tmux ls'
+
+# git
+alias gp='git pull'
+alias gs='git status'
+alias lg='lazygit'
+
+# env variables
+export VISUAL=nvim
+export EDITOR=nvim
+
+# fzf aliases
+# use fp to do a fzf search and preview the files
+alias fp="fzf --preview 'bat --style=numbers --color=always --line-range :500 {}'"
+# search for a file with fzf and open it in vim
+alias vf='v $(fp)'
+

@@ -1,0 +1,6 @@
+ignore-empty-password
+font=Ubuntu
+
+image=~/.config/lockscreen.png
+
+no-unlock-indicator

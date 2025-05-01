@@ -1,0 +1,11 @@
+[general]
+import = [
+    "~/dots/linux/alacritty/alacritty.toml",
+    # "~/dots/linux/alacritty/themes/rose_pine.toml" 
+    "~/dots/linux/alacritty/themes/gruvbox.toml"
+    # "~/dots/linux/alacritty/themes/nord.toml"
+    # "~/dots/linux/alacritty/themes/frappe.toml"
+    # "~/dots/linux/alacritty/themes/macchiato.toml"
+    # "~/dots/linux/alacritty/themes/mocha.toml"
+    # "~/dots/linux/alacritty/themes/latte.toml"
+]

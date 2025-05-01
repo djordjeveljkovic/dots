@@ -1,0 +1,2 @@
+# Remove ctrl-v from terminal
+"\C-v": ""
