@@ -1,0 +1,77 @@
+
+[user]
+    name=Djordje Veljkovic
+    email=djveljkovic3019rn@raf.rs
+    username=djordjeveljkovic
+[core]
+    compression=9
+    whitespace=error
+    preloadindex=true
+[commit]
+    template="~/.config/git/template"
+
+[url "git@github.com:djordjeveljkovic/"]
+    insteadOf="dj:"
+[url "git@github.com:"]
+    insteadOf="gh:"
+
+[init]
+    defaultBranch="dev"
+
+[status]
+    branch=true
+    showStash=true
+    showUntrackedFiles=all
+
+[diff]
+    context=3
+    renames=copies
+    innerHunkContext=10
+
+[pager]
+    diff=diff-so-fancy | $PAGER
+    branch=false
+    tag=false
+
+[diff-so-fancy]
+    markEmptyLines=false
+
+[interactive]
+    diffFilter=diff-so-fancy --patch
+    singleKey=true
+
+[push]
+    autoSetupRemote=true
+    default=current
+
+[pull]
+    default=current
+    rebase=true
+
+[rebase]
+    autoStash=true
+    missingCommitsCheck=warn
+[log]
+    abrevCommit=true
+
+[branch]
+    sort=-commiterdate
+[tag]
+    sort=-taggerdate
+
+# Colors
+[color "blame"]
+    highlightRecent = black bold,1 year ago,white,1 month ago,default,7 days ago,blue
+
+[color "branch"]
+    current  = magenta
+    local    = default
+    remote   = yellow
+    upstream = green
+    plain    = blue
+
+[color "diff"]
+    meta       = black bold
+    frag       = magenta
+    context    = white
+    whitespace = yellow reverse
