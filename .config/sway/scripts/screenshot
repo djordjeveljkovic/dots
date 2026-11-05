@@ -1,0 +1,139 @@
+#!/usr/bin/env bash
+
+set -uo pipefail
+
+MODE="${1:-full}"
+RUNTIME="${XDG_RUNTIME_DIR:-/tmp}"
+ID_FILE="$RUNTIME/screenshot-notification.id"
+LOCK_FILE="$RUNTIME/screenshot-notification.lock"
+
+if [[ "$MODE" == edit ]]; then
+    ID="${2:-}"
+    [[ "$ID" =~ ^[0-9]+$ ]] || exit 1
+
+    flock -x 9 || exit 1
+    PATH_FILE="$RUNTIME/screenshot-notification-$ID.path"
+    [[ -f "$PATH_FILE" ]] || exit 1
+    IFS= read -r FILE < "$PATH_FILE" || exit 1
+    flock -u 9
+
+    [[ -f "$FILE" ]] || exit 1
+    makoctl dismiss -n "$ID" >/dev/null 2>&1 || true
+    exec swappy -f "$FILE" -o "$FILE"
+fi 9>"$LOCK_FILE"
+
+# Load XDG directories if available
+if [[ -f "${XDG_CONFIG_HOME:-$HOME/.config}/user-dirs.dirs" ]]; then
+    source "${XDG_CONFIG_HOME:-$HOME/.config}/user-dirs.dirs"
+fi
+
+SCREENSHOT_DIR="${XDG_SCREENSHOTS_DIR:-${XDG_PICTURES_DIR:-$HOME/Pictures}/Screenshots}"
+
+mkdir -p "$SCREENSHOT_DIR"
+
+TIMESTAMP="$(date '+%Y-%m-%d_%H-%M-%S_%N')"
+FILE="$SCREENSHOT_DIR/Screenshot_$TIMESTAMP.png"
+
+
+case "$MODE" in
+
+    full)
+        grim "$FILE" || exit 1
+        ;;
+
+    region)
+        GEOMETRY="$(slurp -d)" || exit 0
+
+        [[ -z "$GEOMETRY" ]] && exit 0
+
+        grim -g "$GEOMETRY" "$FILE" || exit 1
+        ;;
+
+    window)
+        GEOMETRY="$(
+            swaymsg -t get_tree |
+            jq -r '
+                .. |
+                select(.focused? == true) |
+                .rect |
+                "\(.x),\(.y) \(.width)x\(.height)"
+            ' |
+            head -n1
+        )"
+
+        [[ -z "$GEOMETRY" ]] && exit 1
+
+        grim -g "$GEOMETRY" "$FILE" || exit 1
+        ;;
+
+    color)
+        POINT="$(slurp -p -f '%x,%y')" || exit 0
+
+        [[ -z "$POINT" ]] && exit 0
+
+        COLOR="$(
+            grim \
+                -g "$POINT 1x1" \
+                -t ppm - |
+            magick ppm:- \
+                -format '#%[hex:p{0,0}]' \
+                info:
+        )"
+
+        # Copy HEX value to clipboard
+        printf '%s' "$COLOR" | wl-copy
+
+        notify-send \
+            -a "Color Picker" \
+            -t 2000 \
+            "Color copied" \
+            "$COLOR"
+
+        exit 0
+        ;;
+
+    *)
+        echo "Usage: $0 {full|region|window|color|edit ID}"
+        exit 1
+        ;;
+esac
+
+
+# Also copy screenshot itself to clipboard
+wl-copy --type image/png < "$FILE"
+
+
+# ---------------------------------------------------------
+# Mako notification
+# ---------------------------------------------------------
+
+(
+    flock -x 9 || exit 1
+
+    OLD_ID=""
+    if [[ -f "$ID_FILE" ]]; then
+        IFS= read -r OLD_ID < "$ID_FILE" || OLD_ID=""
+    fi
+
+    REPLACE_ARGS=()
+    if [[ "$OLD_ID" =~ ^[0-9]+$ ]]; then
+        REPLACE_ARGS=(-r "$OLD_ID")
+    fi
+
+    NEW_ID="$(
+        notify-send \
+            -p \
+            "${REPLACE_ARGS[@]}" \
+            -a "Screenshot" \
+            -i "$FILE" \
+            -t 6000 \
+            "Screenshot saved" \
+            "$FILE"
+    )" || exit 1
+
+    [[ "$NEW_ID" =~ ^[0-9]+$ ]] || exit 1
+
+    # Keep the image lookup in sync with the visible notification.
+    printf '%s\n' "$FILE" > "$RUNTIME/screenshot-notification-$NEW_ID.path"
+    printf '%s\n' "$NEW_ID" > "$ID_FILE"
+) 9>"$LOCK_FILE"

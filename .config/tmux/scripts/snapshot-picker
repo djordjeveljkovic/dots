@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+resurrect_dir=${XDG_DATA_HOME:-$HOME/.local/share}/tmux/resurrect
+last_file=$resurrect_dir/last
+restore_script=$HOME/.config/tmux/plugins/tmux-resurrect/scripts/restore.sh
+
+while true; do
+  mapfile -t snapshots < <(find "$resurrect_dir" -maxdepth 1 -type f -name 'tmux_resurrect_*.txt' -printf '%f\n' 2>/dev/null | sort -r)
+  if ((${#snapshots[@]} == 0)); then
+    printf 'No saved tmux snapshots. Save one with Prefix, then Ctrl-S.\n'
+    read -r -n 1 -p 'Press any key to close.' </dev/tty || true
+    exit 0
+  fi
+
+  selection=$(printf '%s\n' "${snapshots[@]}" | fzf \
+    --expect=ctrl-d \
+    --prompt='Restore snapshot > ' \
+    --header='Enter: restore   Ctrl-D: delete snapshot   Esc: cancel' \
+    --height=100% \
+    --reverse \
+    --preview="awk -F '\\t' '/^(session|window|pane)[[:space:]]/ { print }' '$resurrect_dir/{}' | head -n 28") || exit 0
+
+  mapfile -t result <<< "$selection"
+  action=${result[0]:-}
+  snapshot=${result[1]:-}
+  [[ -n $snapshot ]] || continue
+  snapshot_path=$resurrect_dir/$snapshot
+
+  if [[ $action == ctrl-d ]]; then
+    read -r -p "Delete saved snapshot '$snapshot'? [y/N] " answer </dev/tty
+    if [[ $answer == [yY] ]]; then
+      if [[ $(readlink -f "$last_file" 2>/dev/null || true) == "$snapshot_path" ]]; then
+        next_snapshot=$(find "$resurrect_dir" -maxdepth 1 -type f -name 'tmux_resurrect_*.txt' ! -name "$snapshot" -printf '%f\n' 2>/dev/null | sort -r | head -n 1)
+        if [[ -n $next_snapshot ]]; then
+          ln -sfn "$next_snapshot" "$last_file"
+        else
+          rm -f -- "$last_file"
+        fi
+      fi
+      rm -f -- "$snapshot_path"
+    fi
+    continue
+  fi
+
+  ln -sfn "$snapshot" "$last_file"
+  "$restore_script"
+  exit 0
+done

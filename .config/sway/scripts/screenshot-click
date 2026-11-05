@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+
+ID="$1"
+
+RUNTIME="${XDG_RUNTIME_DIR:-/tmp}"
+PATH_FILE="$RUNTIME/screenshot-notification-$ID.path"
+
+[[ ! -f "$PATH_FILE" ]] && exit 1
+
+FILE="$(cat "$PATH_FILE")"
+
+[[ ! -f "$FILE" ]] && exit 1
+
+# Remove notification
+makoctl dismiss -n "$ID" 2>/dev/null
+
+# Open screenshot for drawing/editing
+exec swappy -f "$FILE"

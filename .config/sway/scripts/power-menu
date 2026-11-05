@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+
+lock="  Lock"
+reboot="  Reboot"
+shutdown="  Shutdown"
+
+choice=$(
+    printf '%s\n%s\n%s\n' \
+        "$lock" \
+        "$reboot" \
+        "$shutdown" |
+    fuzzel \
+        --dmenu \
+        --prompt="Power ❯ " \
+        --lines=3 \
+        --width=24
+) || exit 0
+
+case "$choice" in
+    "$lock")
+        swaylock -f
+        ;;
+
+    "$reboot")
+        systemctl reboot
+        ;;
+
+    "$shutdown")
+        systemctl poweroff
+        ;;
+esac

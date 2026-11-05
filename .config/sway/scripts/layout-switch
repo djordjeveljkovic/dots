@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+
+ACTION="$1"
+
+# Get current layout index from the first real keyboard
+current=$(
+  swaymsg -t get_inputs -r |
+    jq -r '
+        [.[] | select(.type == "keyboard" and .xkb_active_layout_index != null)]
+        | .[0].xkb_active_layout_index
+    '
+)
+
+case "$ACTION" in
+
+alt-shift)
+  # English <-> Serbian
+  #
+  # If English -> Serbian Latin
+  # If either Serbian layout -> English
+  case "$current" in
+  0)
+    swaymsg input type:keyboard xkb_switch_layout 1
+    ;;
+  1 | 2)
+    swaymsg input type:keyboard xkb_switch_layout 0
+    ;;
+  esac
+  ;;
+
+ctrl-shift)
+  # Only switch Serbian Latin <-> Serbian Cyrillic.
+  #
+  # If English is active, do nothing.
+  case "$current" in
+  1)
+    swaymsg input type:keyboard xkb_switch_layout 2
+    ;;
+  2)
+    swaymsg input type:keyboard xkb_switch_layout 1
+    ;;
+  esac
+  ;;
+esac

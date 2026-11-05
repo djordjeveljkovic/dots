@@ -1,0 +1,157 @@
+# ============================================================
+# HINTS
+# ============================================================
+
+[hints]
+
+# Characters displayed over detected hints.
+alphabet = "jfkdls;ahgurieowpq"
+
+
+# ------------------------------------------------------------
+# URL
+#
+# Ctrl + Shift + I
+# Open URL in default browser/application
+# ------------------------------------------------------------
+
+[[hints.enabled]]
+regex = '(?:https?://|ftp://|file://|ssh://|git://|mailto:)[^\s<>"`]+'
+command = "xdg-open"
+post_processing = true
+persist = false
+
+binding = {
+    key = "I",
+    mods = "Control|Shift"
+}
+
+mouse = {
+    enabled = true,
+    mods = "Control"
+}
+
+
+# ------------------------------------------------------------
+# IPv4 ADDRESS
+# Ctrl + Shift + P -> Copy
+# ------------------------------------------------------------
+
+[[hints.enabled]]
+regex = '(?-u:\b)(?:25[0-5]|2[0-4][0-9]|1?[0-9]{1,2})(?:\.(?:25[0-5]|2[0-4][0-9]|1?[0-9]{1,2})){3}(?-u:\b)'
+action = "Copy"
+persist = false
+
+binding = {
+    key = "P",
+    mods = "Control|Shift"
+}
+
+
+# ------------------------------------------------------------
+# GIT COMMIT HASH
+# Ctrl + Shift + G -> Copy
+# ------------------------------------------------------------
+
+[[hints.enabled]]
+regex = '(?-u:\b)[0-9a-fA-F]{7,40}(?-u:\b)'
+action = "Copy"
+persist = false
+
+binding = {
+    key = "G",
+    mods = "Control|Shift"
+}
+
+
+# ------------------------------------------------------------
+# GENERAL HASH
+# Ctrl + Shift + H -> Copy
+# ------------------------------------------------------------
+
+[[hints.enabled]]
+regex = '(?-u:\b)(?:[0-9a-fA-F]{32}|[0-9a-fA-F]{40}|[0-9a-fA-F]{64}|[0-9a-fA-F]{96}|[0-9a-fA-F]{128})(?-u:\b)'
+action = "Copy"
+persist = false
+
+binding = {
+    key = "H",
+    mods = "Control|Shift"
+}
+
+# ------------------------------------------------------------
+# FILE PATH - COPY
+#
+# Ctrl + Shift + E
+#
+# Examples:
+# /home/user/project/file.php
+# ~/Downloads/file.pdf
+# ./src/main.rs
+# ../config/app.toml
+# src/components/App.tsx
+# ------------------------------------------------------------
+
+[[hints.enabled]]
+regex = '(?:~?/|\.{1,2}/|[A-Za-z0-9_.-]+/)[A-Za-z0-9_./@%+~:-]+'
+action = "Copy"
+persist = false
+
+binding = {
+    key = "E",
+    mods = "Control|Shift"
+}
+
+
+# ------------------------------------------------------------
+# FILE PATH - OPEN IN YAZI
+#
+# Ctrl + Alt + E
+# ------------------------------------------------------------
+
+[[hints.enabled]]
+regex = '(?:~?/|\.{1,2}/|[A-Za-z0-9_.-]+/)[A-Za-z0-9_./@%+~:-]+'
+command = {
+    program = "alacritty",
+    args = ["-e", "yazi"]
+}
+persist = false
+
+binding = {
+    key = "E",
+    mods = "Control|Alt"
+}
+
+
+# ------------------------------------------------------------
+# IMAGE PATH - COPY
+#
+# Ctrl + Shift + M
+# ------------------------------------------------------------
+
+[[hints.enabled]]
+regex = '(?i)(?:~?/|\.{1,2}/|[A-Za-z0-9_.-]+/)?[A-Za-z0-9_./@%+~:-]+\.(?:png|jpe?g|gif|webp|bmp|svg|avif|heic|heif|tiff?)'
+action = "Copy"
+persist = false
+
+binding = {
+    key = "M",
+    mods = "Control|Shift"
+}
+
+
+# ------------------------------------------------------------
+# IMAGE PATH - OPEN IN SWAYIMG
+#
+# Ctrl + Alt + M
+# ------------------------------------------------------------
+
+[[hints.enabled]]
+regex = '(?i)(?:~?/|\.{1,2}/|[A-Za-z0-9_.-]+/)?[A-Za-z0-9_./@%+~:-]+\.(?:png|jpe?g|gif|webp|bmp|svg|avif|heic|heif|tiff?)'
+command = "swayimg"
+persist = false
+
+binding = {
+    key = "M",
+    mods = "Control|Alt"
+}

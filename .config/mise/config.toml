@@ -1,0 +1,10 @@
+[tools]
+bun = "latest"
+claude-code = "latest"
+go = "1.26"
+java = "25"
+node = "24"
+php = "8.4"
+python = "3.14"
+rust = "stable"
+uv = "latest"

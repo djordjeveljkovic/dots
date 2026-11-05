@@ -1,0 +1,221 @@
+#!/usr/bin/env bash
+set -euo pipefail
+umask 077
+
+pin_db="${XDG_DATA_HOME:-$HOME/.local/share}/cliphist/pinned.db"
+self=$(readlink -f -- "${BASH_SOURCE[0]}")
+
+decode_item() {
+    local source=$1 id=$2
+    [[ "$source" == history || "$source" == pinned ]] && [[ "$id" =~ ^[0-9]+$ ]] || return 1
+    if [[ "$source" == pinned ]]; then
+        cliphist -db-path "$pin_db" decode "$id"
+    else
+        cliphist decode "$id"
+    fi
+}
+
+list_items() {
+    local mode args=()
+    read -r mode < "$CLIPBOARD_PICKER_WORK/mode"
+    [[ "$mode" != pinned ]] || args=(-db-path "$pin_db")
+    # cliphist already lists newest first. No decoding or image work here.
+    { cliphist "${args[@]}" list 2>/dev/null || true; } |
+        awk -v source="$mode" '/^[0-9]+\t/ { print source "\t" $0 }'
+}
+
+header() {
+    local mode
+    read -r mode < "$CLIPBOARD_PICKER_WORK/mode"
+    if [[ "$mode" == pinned ]]; then
+        printf 'Pinned · F3 recent · F5 unpin · F4 zoom · Enter copy · Esc cancel\n'
+    else
+        printf 'Recent · F3 pins · F5 pin · F4 zoom · Enter copy · Esc cancel\n'
+    fi
+}
+
+send_preview() {
+    printf '%s\n' "$1" > "$CLIPBOARD_PICKER_WORK/control"
+}
+
+# This worker belongs to the controller, outside fzf's cancellable preview
+# process groups. The renderer starts only when the first image is highlighted.
+preview_worker() (
+    local work=$CLIPBOARD_PICKER_WORK renderer_pid='' render_fd='' active=''
+    local action token path x y width height
+    # shellcheck disable=SC2329 # Invoked by the EXIT trap.
+    worker_cleanup() {
+        if [[ -n "$renderer_pid" ]]; then
+            kill "$renderer_pid" 2>/dev/null || true
+            wait "$renderer_pid" 2>/dev/null || true
+        fi
+    }
+    trap worker_cleanup EXIT
+    trap 'exit 0' TERM INT HUP
+    exec 8<> "$work/control"
+    while IFS=$'\t' read -r action token path x y width height <&8; do
+        case "$action" in
+            begin|clear|end)
+                [[ "$action" != end || "$token" == "$active" ]] || continue
+                active=$token
+                if [[ -n "$renderer_pid" ]] && kill -0 "$renderer_pid" 2>/dev/null; then
+                    printf '%s\n' '{"action":"remove","identifier":"clipboard"}' >&"$render_fd"
+                fi
+                ;;
+            add)
+                [[ "$token" == "$active" ]] || continue
+                if [[ -z "$renderer_pid" ]]; then
+                    mkfifo -- "$work/renderer"
+                    exec {render_fd}<> "$work/renderer"
+                    ueberzugpp layer --output wayland --no-cache \
+                        <&"$render_fd" >/dev/null 2>"$work/renderer.log" &
+                    renderer_pid=$!
+                fi
+                kill -0 "$renderer_pid" 2>/dev/null || continue
+                jq -cn --arg path "$path" --argjson x "$x" --argjson y "$y" \
+                    --argjson width "$width" --argjson height "$height" \
+                    '{action:"add",identifier:"clipboard",path:$path,x:$x,y:$y,
+                      max_width:$width,max_height:$height,scaler:"fit_contain"}' >&"$render_fd"
+                ;;
+        esac
+    done
+)
+
+preview_item() (
+    local source=${1:-} id=${2:-} token=$BASHPID
+    local data="$CLIPBOARD_PICKER_WORK/$source-$id" mime keep_image=false
+    # shellcheck disable=SC2329 # Invoked by the EXIT trap.
+    preview_cleanup() {
+        if [[ "$keep_image" != true ]]; then send_preview $'end\t'"$token"; fi
+        rm -f -- "$data.$token.part"
+    }
+    trap preview_cleanup EXIT
+    trap 'keep_image=false; exit 0' TERM INT HUP
+    send_preview $'begin\t'"$token"
+    if [[ -z "$source" || -z "$id" ]]; then
+        printf 'No matching entries. F3 switches recent/pinned history.\n'
+        return
+    fi
+    if [[ ! -f "$data" ]]; then
+        if ! decode_item "$source" "$id" > "$data.$token.part"; then
+            printf 'Preview unavailable: the entry may have been removed.\n'
+            return
+        fi
+        mv -- "$data.$token.part" "$data"
+    fi
+    mime=$(file --brief --mime-type -- "$data")
+    if [[ "$mime" == image/* ]]; then
+        printf '%s · F4 toggles a larger preview\n' "$mime"
+        send_preview $'add\t'"$token"$'\t'"$data"$'\t'"${FZF_PREVIEW_LEFT:-0}"$'\t'"$((${FZF_PREVIEW_TOP:-0} + 2))"$'\t'"${FZF_PREVIEW_COLUMNS:-1}"$'\t'"$(( ${FZF_PREVIEW_LINES:-3} > 2 ? ${FZF_PREVIEW_LINES:-3} - 2 : 1 ))"
+        # The UI events own overlay removal. Return immediately: keeping a
+        # preview alive makes fzf wait for its cancellation before continuing.
+        keep_image=true
+    elif [[ "$mime" == text/* || "$mime" == application/json || "$mime" == inode/x-empty ]]; then
+        cat -- "$data"
+    else
+        printf 'Binary entry (%s). Enter copies the original bytes.\n' "$mime"
+    fi
+)
+
+pin_item() {
+    local source=${1:-} id=${2:-} data
+    [[ "$source" == history || "$source" == pinned ]] && [[ "$id" =~ ^[0-9]+$ ]] || return 0
+    mkdir -p -- "${pin_db%/*}"
+    if [[ "$source" == pinned ]]; then
+        printf '%s\n' "$id" | cliphist -db-path "$pin_db" delete
+    else
+        data="$CLIPBOARD_PICKER_WORK/pin"
+        # Decode completely before changing a database or the clipboard.
+        decode_item "$source" "$id" > "$data" || return 1
+        cliphist -db-path "$pin_db" -max-items 1000000 \
+            -max-dedupe-search 1000000 store < "$data"
+        rm -f -- "$data"
+    fi
+}
+
+# The public watcher commands retain their locks and retention settings.
+case "${1:-show}" in
+    watch-text|watch-image)
+        type=${1#watch-}
+        exec flock -n "${XDG_RUNTIME_DIR:?}/clipboard-history-$type.lock" \
+            wl-paste --type "$type" --watch \
+            cliphist -max-items 1000 -max-dedupe-search 1000 store
+        ;;
+    show)
+        exec alacritty --class clipboard-history --title 'Clipboard history' \
+            -e "$self" --picker
+        ;;
+    --list) list_items; exit ;;
+    --toggle)
+        read -r mode < "$CLIPBOARD_PICKER_WORK/mode"
+        if [[ "$mode" == pinned ]]; then mode=history; else mode=pinned; fi
+        printf '%s\n' "$mode" > "$CLIPBOARD_PICKER_WORK/mode"
+        header; exit
+        ;;
+    --preview) shift; preview_item "$@"; exit ;;
+    --clear) send_preview clear; exit ;;
+    --pin) shift; pin_item "$@"; exit ;;
+    --picker) ;;
+    *) printf 'Usage: %s [show|watch-text|watch-image]\n' "$0" >&2; exit 2 ;;
+esac
+
+export CLIPBOARD_PICKER_WORK
+CLIPBOARD_PICKER_WORK=$(mktemp -d "${XDG_RUNTIME_DIR:-${TMPDIR:-/tmp}}/clipboard-history.XXXXXX")
+work=$CLIPBOARD_PICKER_WORK
+worker_pid='' picker_pid=''
+cleanup() {
+    trap '' TERM INT HUP
+    # Hide the overlay before waiting for fzf's preview cancellation or copying.
+    [[ -z "$worker_pid" ]] || send_preview clear
+    if [[ -n "$picker_pid" ]]; then
+        kill "$picker_pid" 2>/dev/null || true
+        wait "$picker_pid" 2>/dev/null || true
+    fi
+    if [[ -n "$worker_pid" ]]; then
+        kill "$worker_pid" 2>/dev/null || true
+        wait "$worker_pid" 2>/dev/null || true
+    fi
+    rm -rf -- "$work"
+}
+trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM HUP
+
+printf 'history\n' > "$work/mode"
+mkfifo -- "$work/control"
+preview_worker &
+worker_pid=$!
+# Opening the writer synchronizes with the worker, without polling or a delay.
+exec {control_fd}> "$work/control"
+exec {control_fd}>&-
+list_items > "$work/menu"
+export CLIPBOARD_PICKER_SELF="$self"
+
+# Use a known shell and ignore personal fzf defaults, which may enable tmux,
+# multi-selection, automatic acceptance, or a different preview command.
+# shellcheck disable=SC2016 # fzf expands these variables in its child shell.
+FZF_DEFAULT_OPTS='' FZF_DEFAULT_OPTS_FILE='' SHELL=/bin/bash \
+    fzf --layout=reverse --border --delimiter=$'\t' --with-nth=3.. \
+        --tiebreak=index --prompt='Clipboard: ' --header="$(header)" \
+        --preview='"$CLIPBOARD_PICKER_SELF" --preview {1} {2} {q}' \
+        --preview-window='right,50%,border-left,wrap' \
+        --bind='ctrl-j:down,ctrl-k:up,ctrl-n:down,ctrl-p:up' \
+        --bind='focus:execute-silent("$CLIPBOARD_PICKER_SELF" --clear)+refresh-preview' \
+        --bind='enter,double-click:execute-silent("$CLIPBOARD_PICKER_SELF" --clear)+accept-non-empty' \
+        --bind='esc,ctrl-c,ctrl-g,ctrl-q:execute-silent("$CLIPBOARD_PICKER_SELF" --clear)+abort' \
+        --bind='f3:execute-silent("$CLIPBOARD_PICKER_SELF" --clear)+transform-header("$CLIPBOARD_PICKER_SELF" --toggle)+reload("$CLIPBOARD_PICKER_SELF" --list)' \
+        --bind='f5:execute-silent("$CLIPBOARD_PICKER_SELF" --clear)+execute-silent("$CLIPBOARD_PICKER_SELF" --pin {1} {2})+reload("$CLIPBOARD_PICKER_SELF" --list)' \
+        --bind='f4:execute-silent("$CLIPBOARD_PICKER_SELF" --clear)+change-preview-window(right,85%,border-left,wrap|right,50%,border-left,wrap)+refresh-preview' \
+        --bind='zero:execute-silent("$CLIPBOARD_PICKER_SELF" --clear)' \
+        --bind='resize:execute-silent("$CLIPBOARD_PICKER_SELF" --clear)+refresh-preview' \
+        < "$work/menu" > "$work/selection" &
+picker_pid=$!
+status=0
+wait "$picker_pid" || status=$?
+picker_pid=''
+send_preview clear
+# Escape, a closed terminal, or any picker failure never writes the clipboard.
+(( status == 0 )) || exit 0
+IFS=$'\t' read -r source id _ < "$work/selection" || exit 0
+decode_item "$source" "$id" > "$work/copy" || exit 1
+wl-copy < "$work/copy"

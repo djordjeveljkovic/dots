@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Fedora-style systemd-oomd: pressure-based killing inside the user manager
+# (one app scope at a time, with uwsm) and swap-based killing system-wide.
+user_dropin=/etc/systemd/system/user@.service.d/10-oomd.conf
+root_dropin=/etc/systemd/system/-.slice.d/10-oomd.conf
+oomd_dropin=/etc/systemd/oomd.conf.d/10-tuning.conf
+dropins=("$user_dropin" "$root_dropin" "$oomd_dropin")
+marker='# Managed by .dot bin/oomd-setup'
+usage() { printf 'Usage: %s setup|remove\n' "${0##*/}"; }
+(( $# == 1 )) || { usage >&2; exit 2; }
+case "$1" in setup|remove) action=$1 ;; -h|--help|help) usage; exit 0 ;; *) usage >&2; exit 2 ;; esac
+(( EUID == 0 )) || { printf 'Run with administrator access (for example: sudo %s %s).\n' "${0##*/}" "$1" >&2; exit 1; }
+
+for dropin in "${dropins[@]}"; do
+    if [[ -e "$dropin" || -L "$dropin" ]]; then
+        grep -Fqx -- "$marker" "$dropin" || { printf 'Refusing to touch unmanaged drop-in: %s\n' "$dropin" >&2; exit 1; }
+    fi
+done
+
+write_dropin() {
+    install -d -m 755 "$(dirname -- "$1")"
+    printf '%s\n%s\n' "$marker" "$2" > "$1"
+    chmod 644 "$1"
+}
+
+case "$action" in
+    setup)
+        # Killing a whole session scope would end the desktop; require uwsm.
+        if [[ -n "${SUDO_USER:-}" ]] && pgrep -u "$SUDO_USER" -x sway >/dev/null \
+            && grep -q 'session-[0-9]*\.scope' "/proc/$(pgrep -u "$SUDO_USER" -x sway | head -1)/cgroup"; then
+            printf 'Sway runs in a login session scope. Log in again through uwsm first.\n' >&2
+            exit 1
+        fi
+        write_dropin "$user_dropin" $'[Service]\nManagedOOMMemoryPressure=kill\nManagedOOMMemoryPressureLimit=50%'
+        write_dropin "$root_dropin" $'[Slice]\nManagedOOMSwap=kill'
+        write_dropin "$oomd_dropin" $'[OOM]\nSwapUsedLimit=90%\nDefaultMemoryPressureDurationSec=20s'
+        systemctl daemon-reload
+        systemctl enable --now systemd-oomd
+        printf 'Enabled systemd-oomd. Check with: oomctl\n'
+        ;;
+    remove)
+        for dropin in "${dropins[@]}"; do
+            [[ -e "$dropin" ]] || continue
+            rm -- "$dropin"
+            rmdir --ignore-fail-on-non-empty "$(dirname -- "$dropin")"
+        done
+        systemctl disable --now systemd-oomd
+        systemctl daemon-reload
+        printf 'Removed the managed oomd drop-ins and disabled systemd-oomd.\n'
+        ;;
+esac

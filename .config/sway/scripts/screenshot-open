@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+
+id="$1"
+mapping="$HOME/.cache/mako-screenshots/$id"
+
+[ -f "$mapping" ] || exit 1
+
+file="$(cat "$mapping")"
+
+[ -f "$file" ] || exit 1
+
+swappy -f "$file"
+
+rm -f "$mapping"

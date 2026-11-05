@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+unit_dir=/etc/systemd/system/getty@tty1.service.d
+dropin="$unit_dir/override.conf"
+marker='# Managed by .dot bin/tty-autologin'
+usage() { printf 'Usage: %s setup|remove\n' "${0##*/}"; }
+(( $# == 1 )) || { usage >&2; exit 2; }
+case "$1" in setup|remove) action=$1 ;; -h|--help|help) usage; exit 0 ;; *) usage >&2; exit 2 ;; esac
+(( EUID == 0 )) || { printf 'Run with administrator access (for example: sudo %s %s).\n' "${0##*/}" "$1" >&2; exit 1; }
+
+case "$action" in
+    setup)
+        if [[ -e "$dropin" || -L "$dropin" ]]; then
+            grep -Fqx -- "$marker" "$dropin" || { printf 'Refusing to replace unmanaged drop-in: %s\n' "$dropin" >&2; exit 1; }
+        fi
+        login_user=${SUDO_USER:-}
+        [[ -n "$login_user" && "$login_user" != root ]] || { printf 'Run through sudo from the account that should log in automatically.\n' >&2; exit 1; }
+        install -d -m 755 "$unit_dir"
+        tmp=$(mktemp "$unit_dir/.override.conf.XXXXXX")
+        trap 'rm -f -- "$tmp"' EXIT
+        # shellcheck disable=SC2016
+        printf '%s\n[Service]\nExecStart=\nExecStart=-/usr/bin/agetty --autologin %s --noclear %%I $TERM\n' \
+            "$marker" "$login_user" > "$tmp"
+        chmod 644 "$tmp"
+        mv -f -- "$tmp" "$dropin"
+        trap - EXIT
+        systemctl daemon-reload
+        printf 'Enabled tty1 autologin. The tty1 password prompt is disabled.\n'
+        ;;
+    remove)
+        if [[ ! -e "$dropin" && ! -L "$dropin" ]]; then printf 'No tty1 autologin drop-in exists.\n'; exit 0; fi
+        grep -Fqx -- "$marker" "$dropin" || { printf 'Refusing to remove unmanaged drop-in: %s\n' "$dropin" >&2; exit 1; }
+        rm -- "$dropin"
+        rmdir --ignore-fail-on-non-empty "$unit_dir"
+        systemctl daemon-reload
+        printf 'Removed the managed tty1 autologin drop-in.\n'
+        ;;
+esac

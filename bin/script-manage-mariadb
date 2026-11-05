@@ -1,0 +1,213 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+readonly NETWORK=dot-databases
+readonly CONFIG_ROOT="${XDG_CONFIG_HOME:-$HOME/.config}/dot/db-containers/phpmyadmin"
+
+for dependency in podman gum python3; do
+    command -v "$dependency" >/dev/null 2>&1 || {
+        printf 'Missing required command: %s\n' "$dependency" >&2
+        exit 1
+    }
+done
+
+ensure_network() {
+    podman network exists "$NETWORK" || podman network create "$NETWORK" >/dev/null
+}
+
+container_names() { podman ps -a --format '{{.Names}}'; }
+
+mariadb_containers() {
+    local name image
+    while IFS= read -r name; do
+        [[ -n "$name" ]] || continue
+        image=$(podman inspect --format '{{.Config.Image}}' "$name" 2>/dev/null || true)
+        [[ "$image" == *mariadb* ]] && printf '%s\n' "$name"
+    done < <(container_names)
+}
+
+phpmyadmin_containers() {
+    local name image
+    while IFS= read -r name; do
+        [[ -n "$name" ]] || continue
+        image=$(podman inspect --format '{{.Config.Image}}' "$name" 2>/dev/null || true)
+        [[ "$image" == *phpmyadmin* ]] && printf '%s\n' "$name"
+    done < <(container_names)
+}
+
+port_available() {
+    python3 - "$1" <<'PY'
+import socket, sys
+s = socket.socket()
+try:
+    s.bind(("127.0.0.1", int(sys.argv[1])))
+except OSError:
+    raise SystemExit(1)
+finally:
+    s.close()
+PY
+}
+
+prompt_password() {
+    local saved=""
+    unset MARIADB_ROOT_PASSWORD ROOT_PASSWORD
+    if [[ -f "$HOME/.config/secrets.env" ]]; then
+        source "$HOME/.config/secrets.env"
+        saved=${MARIADB_ROOT_PASSWORD:-}
+        unset MARIADB_ROOT_PASSWORD
+    fi
+    if [[ -n "$saved" ]]; then
+        case $(gum choose "Use saved MARIADB_ROOT_PASSWORD" "Enter a different password" "Cancel") in
+            "Use saved MARIADB_ROOT_PASSWORD") ROOT_PASSWORD=$saved ;;
+            "Enter a different password") ROOT_PASSWORD=$(gum input --password --header "MariaDB root password") ;;
+            *) unset saved; return 1 ;;
+        esac
+    else
+        ROOT_PASSWORD=$(gum input --password --header "MariaDB root password")
+    fi
+    unset saved
+    [[ -n "$ROOT_PASSWORD" ]] || { echo "A non-empty password is required." >&2; return 1; }
+}
+
+create_mariadb() {
+    local name container volume secret secret_file port
+    name=$(gum input --placeholder "lowercase name" --header "Create MariaDB instance") || true
+    [[ -n "$name" ]] || return 0
+    [[ "$name" =~ ^[a-z][a-z0-9_-]{0,31}$ ]] || {
+        echo "Name must start with a lowercase letter and contain only lowercase letters, digits, _ or -." >&2
+        return 1
+    }
+    container="dot-db-${name}"
+    volume="dot-db-${name}-data"
+    secret="dot-db-${name}-root"
+    if podman container exists "$container"; then
+        echo "Container already exists: $container" >&2
+        return 1
+    fi
+    if podman secret inspect "$secret" >/dev/null 2>&1; then
+        echo "Podman secret already exists: $secret" >&2
+        return 1
+    fi
+    prompt_password || return 0
+    secret_file=$(mktemp)
+    chmod 600 "$secret_file"
+    printf '%s' "$ROOT_PASSWORD" >"$secret_file"
+    unset ROOT_PASSWORD
+    if ! podman secret create "$secret" "$secret_file" >/dev/null; then
+        rm -f -- "$secret_file"
+        echo "Could not create Podman secret '$secret'." >&2
+        return 1
+    fi
+    rm -f -- "$secret_file"
+
+    ensure_network
+    podman volume exists "$volume" || podman volume create "$volume" >/dev/null
+    for ((port=3306; port<3400; port++)); do
+        port_available "$port" || continue
+        if podman run -d --name "$container" --network "$NETWORK" \
+            --label io.dot.db.instance="$name" --label io.dot.db.type=mariadb \
+            -p "127.0.0.1:${port}:3306" -v "${volume}:/var/lib/mysql:Z" \
+            --secret "$secret,target=/run/secrets/$secret,type=mount" \
+            -e "MARIADB_ROOT_PASSWORD_FILE=/run/secrets/$secret" \
+            docker.io/library/mariadb:11 >/dev/null; then
+            printf 'Created %s on 127.0.0.1:%s with persistent volume %s.\n' "$container" "$port" "$volume"
+            return 0
+        fi
+        if podman container exists "$container"; then podman rm -f "$container" >/dev/null 2>&1 || true; fi
+        if port_available "$port"; then
+            echo "Podman could not start '$container'; see the error above." >&2
+            return 1
+        fi
+    done
+    echo "No free localhost port found in 3306–3399." >&2
+    return 1
+}
+
+attach_network() {
+    local name=$1 networks
+    networks=$(podman inspect --format '{{range $name, $value := .NetworkSettings.Networks}}{{println $name}}{{end}}' "$name") || return 1
+    grep -Fxq "$NETWORK" <<<"$networks" || podman network connect "$NETWORK" "$name"
+}
+
+register_server() {
+    local db pma db_list pma_list config_dir config_file config_name target
+    db_list=$(mariadb_containers)
+    [[ -n "$db_list" ]] || { echo "No MariaDB containers found." >&2; return 1; }
+    mapfile -t db_choices <<<"$db_list"
+    db=$(gum choose --header "Select MariaDB container" "${db_choices[@]}") || true
+    [[ -n "$db" ]] || return 0
+
+    pma_list=$(phpmyadmin_containers)
+    [[ -n "$pma_list" ]] || { echo "No PHPMyAdmin containers found. Create one first." >&2; return 1; }
+    mapfile -t pma_choices <<<"$pma_list"
+    pma=$(gum choose --header "Select PHPMyAdmin container" "${pma_choices[@]}") || true
+    [[ -n "$pma" ]] || return 0
+    [[ $(podman inspect --format '{{.State.Running}}' "$pma" 2>/dev/null || true) == true ]] || {
+        echo "Start PHPMyAdmin container '$pma' first." >&2; return 1;
+    }
+    if ! podman exec "$pma" sh -c \
+        'test -d /etc/phpmyadmin/conf.d && test -f /etc/phpmyadmin/config.inc.php && grep -q "conf.d" /etc/phpmyadmin/config.inc.php' \
+        >/dev/null 2>&1; then
+        echo "'$pma' does not support the expected PHPMyAdmin conf.d loader; it was left unchanged." >&2
+        return 1
+    fi
+
+    ensure_network
+    attach_network "$db" || { echo "Could not attach '$db' to '$NETWORK'." >&2; return 1; }
+    attach_network "$pma" || { echo "Could not attach '$pma' to '$NETWORK'." >&2; return 1; }
+
+    config_name=$(printf '%s' "$db" | tr -c 'a-zA-Z0-9_' '_')
+    config_dir="$CONFIG_ROOT/$pma/conf.d"
+    config_file="$config_dir/dots-mariadb-server-${config_name}.php"
+    target="/etc/phpmyadmin/conf.d/dots-mariadb-server-${config_name}.php"
+    mkdir -p "$config_dir"
+    chmod 700 "$CONFIG_ROOT" "$CONFIG_ROOT/$pma" "$config_dir"
+    if [[ -e "$config_file" ]] && ! grep -q '^// managed by script-manage-mariadb$' "$config_file"; then
+        echo "Refusing to overwrite existing host config '$config_file'." >&2; return 1
+    fi
+    if podman exec "$pma" test -e "$target" 2>/dev/null \
+        && ! podman exec "$pma" grep -q '^// managed by script-manage-mariadb$' "$target" 2>/dev/null; then
+        echo "Refusing to overwrite existing PHPMyAdmin config '$target'." >&2; return 1
+    fi
+    cat >"$config_file" <<PHP
+<?php
+// managed by script-manage-mariadb
+\$i = count(\$cfg['Servers'] ?? []);
+\$i++;
+\$cfg['Servers'][\$i]['verbose'] = 'MariaDB: ${db}';
+\$cfg['Servers'][\$i]['host'] = '${db}';
+\$cfg['Servers'][\$i]['port'] = 3306;
+\$cfg['Servers'][\$i]['extension'] = 'mysqli';
+\$cfg['Servers'][\$i]['auth_type'] = 'cookie';
+\$cfg['Servers'][\$i]['AllowNoPassword'] = false;
+PHP
+    chmod 600 "$config_file"
+    podman cp "$config_file" "$pma:$target" || {
+        echo "Could not copy config; host copy remains at '$config_file'." >&2; return 1;
+    }
+    podman restart "$pma" >/dev/null || {
+        echo "Could not restart '$pma'; host config remains at '$config_file'." >&2; return 1;
+    }
+    printf 'Registered %s in %s. Host config: %s\n' "$db" "$pma" "$config_file"
+}
+
+list_mariadb() {
+    local name
+    local -a names=()
+    mapfile -t names < <(mariadb_containers)
+    if ((${#names[@]} == 0)); then echo "No MariaDB containers found."; return; fi
+    for name in "${names[@]}"; do
+        podman ps -a --filter "name=^${name}$" --format '{{.Names}} ({{.Image}}) [{{.Status}}]'
+    done | gum pager
+}
+
+while true; do
+    choice=$(gum choose --header "MariaDB container manager" \
+        "Create MariaDB container" "List MariaDB containers" "Add MariaDB to PHPMyAdmin" "Back") || true
+    case "$choice" in
+        "Create MariaDB container") create_mariadb || true ;;
+        "List MariaDB containers") list_mariadb || true ;;
+        "Add MariaDB to PHPMyAdmin") register_server || true ;;
+        "Back"|"") break ;;
+    esac
+done

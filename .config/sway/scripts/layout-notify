@@ -1,0 +1,52 @@
+#!/usr/bin/env bash
+
+LOCK="${XDG_RUNTIME_DIR}/sway-layout-notify.lock"
+
+exec 9>"$LOCK"
+flock -n 9 || exit 0
+
+notification_id=""
+
+swaymsg -t subscribe -m '["input"]' |
+  jq --unbuffered -r '
+    select(.change == "xkb_layout") |
+    .input.xkb_active_layout_index
+' |
+  awk '
+    $0 != last {
+        print
+        fflush()
+        last = $0
+    }
+' |
+  while read -r index; do
+
+    case "$index" in
+    0) name="English" ;;
+    1) name="Srpski — Latinica" ;;
+    2) name="Српски — Ћирилица" ;;
+    *) continue ;;
+    esac
+
+    if [[ -n "$notification_id" ]]; then
+      notification_id=$(
+        notify-send \
+          -p \
+          -r "$notification_id" \
+          -a "Keyboard Layout" \
+          -t 1200 \
+          "Keyboard" \
+          "$name"
+      )
+    else
+      notification_id=$(
+        notify-send \
+          -p \
+          -a "Keyboard Layout" \
+          -t 1200 \
+          "Keyboard" \
+          "$name"
+      )
+    fi
+
+  done

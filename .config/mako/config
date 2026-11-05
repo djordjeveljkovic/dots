@@ -1,0 +1,24 @@
+include=~/.config/mako/rose-pine.conf
+
+[app-name="Screenshot"]
+anchor=top-right
+
+width=520
+height=420
+
+icons=1
+icon-location=top
+max-icon-size=500
+
+# Show the screenshot preview above its saved path.
+format=%b
+text-alignment=left
+
+padding=10
+margin=10
+
+default-timeout=6000
+actions=1
+
+on-button-left=exec ~/.config/sway/scripts/screenshot edit "$id"
+on-button-right=dismiss

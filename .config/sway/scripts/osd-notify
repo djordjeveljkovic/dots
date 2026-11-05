@@ -1,0 +1,105 @@
+#!/usr/bin/env bash
+
+ID_FILE="${XDG_RUNTIME_DIR}/sway-osd-notification.id"
+
+type="$1"
+
+case "$type" in
+
+volume)
+  mute=$(pactl get-sink-mute @DEFAULT_SINK@ | awk '{print $2}')
+
+  volume=$(
+    pactl get-sink-volume @DEFAULT_SINK@ |
+      grep -o '[0-9]\+%' |
+      head -1
+  )
+
+  if [[ "$mute" == "yes" ]]; then
+    title="Volume"
+    text="Muted"
+  else
+    title="Volume"
+    text="$volume"
+  fi
+  ;;
+
+mic)
+  mute=$(pactl get-source-mute @DEFAULT_SOURCE@ | awk '{print $2}')
+
+  volume=$(
+    pactl get-source-volume @DEFAULT_SOURCE@ |
+      grep -o '[0-9]\+%' |
+      head -1
+  )
+
+  if [[ "$mute" == "yes" ]]; then
+    title="Microphone"
+    text="Muted"
+  else
+    title="Microphone"
+    text="$volume"
+  fi
+  ;;
+
+brightness)
+  brightness=$(brightnessctl -m | awk -F, '{print $4}')
+
+  title="Brightness"
+  text="$brightness"
+  ;;
+
+media)
+  status=$(playerctl status 2>/dev/null)
+
+  if [[ -z "$status" ]]; then
+    exit 0
+  fi
+
+  artist=$(playerctl metadata artist 2>/dev/null)
+  track=$(playerctl metadata title 2>/dev/null)
+
+  title="$status"
+
+  if [[ -n "$artist" && -n "$track" ]]; then
+    text="$artist — $track"
+  elif [[ -n "$track" ]]; then
+    text="$track"
+  else
+    text="Media"
+  fi
+  ;;
+
+*)
+  exit 1
+  ;;
+esac
+
+old_id=""
+
+if [[ -f "$ID_FILE" ]]; then
+  old_id=$(cat "$ID_FILE")
+fi
+
+if [[ -n "$old_id" ]]; then
+  new_id=$(
+    notify-send \
+      -p \
+      -r "$old_id" \
+      -a "Sway OSD" \
+      -t 1200 \
+      "$title" \
+      "$text"
+  )
+else
+  new_id=$(
+    notify-send \
+      -p \
+      -a "Sway OSD" \
+      -t 1200 \
+      "$title" \
+      "$text"
+  )
+fi
+
+echo "$new_id" >"$ID_FILE"

@@ -1,0 +1,9 @@
+[opener]
+swayimg = [
+    { run = 'swayimg --appid=yazi-swayimg --size=900,600 %s', orphan = true, desc = "View with swayimg", for = "linux" },
+]
+
+[open]
+prepend_rules = [
+    { mime = "image/*", use = [ "swayimg", "open" ] },
+]

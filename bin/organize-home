@@ -1,0 +1,124 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+    printf 'Usage: %s [--setup|--check|--help]\n' "${0##*/}"
+}
+
+mode=${1:---setup}
+if (( $# > 1 )); then
+    usage >&2
+    exit 2
+fi
+
+case "$mode" in
+    --setup|--check) ;;
+    --help|-h)
+        usage
+        exit 0
+        ;;
+    *)
+        usage >&2
+        exit 2
+        ;;
+esac
+
+home=${HOME:?HOME must be set}
+home=$(cd -- "$home" && pwd -P)
+config_home=${XDG_CONFIG_HOME:-"$home/.config"}
+
+if [[ "$mode" == --setup ]]; then
+    directories=(
+        Projects/repos/work Projects/repos/lab Projects/repos/hardware
+        Projects/local/work Projects/local/lab Projects/local/hardware
+        System/arch/packages System/arch/archive System/arch/local
+        Scripts/bin Scripts/share/emoji-picker
+        Documents/work Documents/lab
+        Downloads/archives Downloads/documents Downloads/images
+        Downloads/installers Downloads/other Downloads/spreadsheets Downloads/web
+        Pictures/Photos Pictures/Screenshots Pictures/Wallpapers
+        Music
+        Archive/projects
+    )
+
+    for directory in "${directories[@]}"; do
+        mkdir -p -- "$home/$directory"
+    done
+
+    bookmark_dir="$config_home/gtk-3.0"
+    bookmark_file="$bookmark_dir/bookmarks"
+    mkdir -p -- "$bookmark_dir"
+    bookmark_tmp=$(mktemp "$bookmark_file.tmp.XXXXXX")
+    if [[ -f "$bookmark_file" ]]; then
+        awk '{ print }' "$bookmark_file" > "$bookmark_tmp"
+    fi
+
+    bookmarks=(Documents Downloads Music Pictures Projects Scripts System)
+    for name in "${bookmarks[@]}"; do
+        path="$home/$name"
+        uri_path=${path//%/%25}
+        uri_path=${uri_path// /%20}
+        uri_path=${uri_path//#/%23}
+        uri_path=${uri_path//\?/%3F}
+        uri="file://$uri_path"
+        if ! awk -v uri="$uri" '$1 == uri { found=1 } END { exit !found }' "$bookmark_tmp"; then
+            printf '%s %s\n' "$uri" "$name" >> "$bookmark_tmp"
+        fi
+    done
+
+    chmod 600 -- "$bookmark_tmp"
+    if [[ -f "$bookmark_file" ]] && cmp -s -- "$bookmark_tmp" "$bookmark_file"; then
+        rm -f -- "$bookmark_tmp"
+    else
+        mv -f -- "$bookmark_tmp" "$bookmark_file"
+    fi
+fi
+
+issues=0
+
+audit_children() {
+    local container=$1
+    shift
+    [[ -d "$container" ]] || return 0
+
+    local entry name allowed match
+    while IFS= read -r -d '' entry; do
+        name=${entry##*/}
+        if [[ "$name" == .* ]]; then
+            if [[ "$container" == "$home/Downloads" && "$name" == .tmp_* ]]; then
+                printf 'Outside layout: %s (incomplete download; review when finished)\n' "$entry"
+                issues=$((issues + 1))
+            fi
+            continue
+        fi
+        match=0
+        for allowed in "$@"; do
+            if [[ "$name" == "$allowed" ]]; then
+                match=1
+                break
+            fi
+        done
+        if (( match == 0 )); then
+            printf 'Outside layout: %s (unexpected direct child of %s)\n' "$entry" "$container"
+            issues=$((issues + 1))
+        fi
+    done < <(find "$container" -mindepth 1 -maxdepth 1 -print0)
+}
+
+audit_children "$home" Documents Downloads Music Pictures Projects Scripts System Archive go
+audit_children "$home/Projects" repos local
+audit_children "$home/Projects/repos" work lab hardware
+audit_children "$home/Projects/local" work lab hardware
+audit_children "$home/System" arch
+audit_children "$home/System/arch" packages archive local README.md
+audit_children "$home/Documents" work lab
+audit_children "$home/Downloads" archives documents images installers other spreadsheets web
+audit_children "$home/Pictures" Photos Screenshots Wallpapers
+audit_children "$home/Scripts" bin share
+audit_children "$home/Archive" projects
+
+if (( issues == 0 )); then
+    printf 'No unsorted visible entries found at managed folder boundaries.\n'
+else
+    printf 'Found %d item(s) to review. No files were moved or deleted.\n' "$issues"
+fi

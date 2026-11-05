@@ -1,0 +1,15 @@
+# ~/.config/alacritty/alacritty.toml
+[general]
+	import = ["rose-pine.toml", "hints.toml"]
+[window]
+  padding = { x = 10, y = 10}
+[mouse]
+  hide_when_typing = true
+  bindings = [
+    { mouse = "Right", mods = "Control", action = "Paste" },
+  ]
+
+[font]
+  normal = { family = "GoogleSansCode Nerd Font" }
+  size = 13.15
+

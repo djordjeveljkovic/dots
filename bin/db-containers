@@ -1,0 +1,283 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+network=dot-databases
+config_dir=${XDG_CONFIG_HOME:-"$HOME/.config"}/dot/db-containers
+
+usage() {
+    cat <<'EOF'
+Usage:
+  db-containers create <postgres|mariadb|mysql> <name> [database-host-port]
+  db-containers tool adminer [web-host-port]
+  db-containers tool pgadmin <postgres-name> [web-host-port]
+  db-containers tool phpmyadmin <mariadb-or-mysql-name> [web-host-port]
+  db-containers start|stop|status <name|all>
+  db-containers list
+  db-containers remove <name>
+
+Each database name gets its own container, data volume, and credentials file.
+The create command's optional port is the host port for the database service
+(MariaDB/MySQL use container port 3306). The tool commands' optional port is
+the host port for the Adminer/pgAdmin/phpMyAdmin website (container port 8080/5050/80).
+Omit database-host-port to let Podman choose an available localhost port.
+Removing a container preserves its data volume.
+EOF
+}
+die() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
+require_podman() { command -v podman >/dev/null 2>&1 || die 'podman is not installed.'; }
+valid_name() { [[ "$1" =~ ^[a-z][a-z0-9_-]{0,31}$ ]]; }
+validate_port() {
+    [[ "$1" =~ ^[0-9]{1,5}$ ]] || die 'Host port must be a number from 1 to 65535.'
+    (( $1 >= 1 && $1 <= 65535 )) || die 'Host port must be a number from 1 to 65535.'
+}
+ensure_network() {
+    podman network exists "$network" || podman network create "$network" >/dev/null
+}
+db_container() { printf 'dot-db-%s' "$1"; }
+db_volume() { printf 'dot-db-%s-data' "$1"; }
+tool_container() {
+    case "$1" in
+        adminer) printf dot-adminer ;;
+        phpmyadmin) printf 'dot-phpmyadmin-%s' "$2" ;;
+        pgadmin) printf 'dot-pgadmin-%s' "$2" ;;
+    esac
+}
+port_mapping() {
+    if [[ -n "$1" ]]; then printf '127.0.0.1:%s:%s' "$1" "$2"
+    else printf '127.0.0.1::%s' "$2"
+    fi
+}
+report_port() {
+    local container=$1 internal_port=$2
+    podman port "$container" "$internal_port/tcp" | awk 'NR == 1 {print $NF}'
+}
+write_credentials() {
+    local name=$1 expected_type=$2
+    local credentials="$config_dir/$name.env"
+    [[ ! -L "$credentials" ]] || die "Credentials path must not be a symlink: $credentials"
+    if [[ -e "$credentials" ]]; then
+        [[ -f "$credentials" ]] || die "Credentials path is not a regular file: $credentials"
+        chmod 600 -- "$credentials"
+        stored_type=$(sed -n 's/^DB_TYPE=\([a-z]*\)$/\1/p' "$credentials")
+        [[ "$stored_type" == "$expected_type" ]] || die "Instance name $name already has credentials for database type '$stored_type'."
+        printf '%s\n' "$credentials"
+        return
+    fi
+    local app_password root_password
+    app_password=$(od -An -N24 -tx1 /dev/urandom | tr -d ' \n')
+    root_password=$(od -An -N24 -tx1 /dev/urandom | tr -d ' \n')
+    umask 077
+    printf 'DB_TYPE=%s\nAPP_PASSWORD=%s\nROOT_PASSWORD=%s\n' "$expected_type" "$app_password" "$root_password" > "$credentials"
+    printf '%s\n' "$credentials"
+}
+credentials_value() {
+    local file=$1 key=$2 value
+    value=$(sed -n "s/^${key}=\([[:xdigit:]]\{48\}\)$/\1/p" "$file")
+    [[ ${#value} == 48 ]] || die "Invalid credentials file: $file"
+    printf '%s' "$value"
+}
+existing_instance_type() {
+    podman inspect --format '{{ index .Config.Labels "io.dot.db.type" }}' "$(db_container "$1")" 2>/dev/null || true
+}
+
+(( $# > 0 )) || { usage >&2; exit 2; }
+action=$1
+shift
+case "$action" in
+    -h|--help|help) usage; exit 0 ;;
+    list)
+        (( $# == 0 )) || { usage >&2; exit 2; }
+        require_podman
+        podman ps -a --filter label=io.dot.db.type --format '{{.Names}}  {{.Status}}  {{.Ports}}'
+        exit 0
+        ;;
+    create)
+        (( $# == 2 || $# == 3 )) || { usage >&2; exit 2; }
+        db_type=$1 name=$2 database_host_port=${3:-}
+        case "$db_type" in postgres|mariadb|mysql) ;; *) usage >&2; exit 2 ;; esac
+        valid_name "$name" || die 'Name must start with a lowercase letter and contain only lowercase letters, digits, _ or - (up to 32 characters).'
+        [[ -z "$database_host_port" ]] || validate_port "$database_host_port"
+        require_podman
+        container=$(db_container "$name")
+        podman container exists "$container" && die "Instance already exists: $name"
+        credentials_dir=$config_dir
+        mkdir -p -- "$credentials_dir"
+        credentials=$(write_credentials "$name" "$db_type")
+        app_password=$(credentials_value "$credentials" APP_PASSWORD)
+        root_password=$(credentials_value "$credentials" ROOT_PASSWORD)
+        ensure_network
+        case "$db_type" in
+            postgres)
+                podman run -d --name "$container" --label io.dot.db.instance="$name" \
+                    --label io.dot.db.type=postgres --network "$network" \
+                    -p "$(port_mapping "$database_host_port" 5432)" -e POSTGRES_USER=app \
+                    -e POSTGRES_PASSWORD="$app_password" -e POSTGRES_DB=app \
+                    -v "$(db_volume "$name"):/var/lib/postgresql/data:Z" \
+                    docker.io/library/postgres:17
+                ;;
+            mariadb)
+                podman run -d --name "$container" --label io.dot.db.instance="$name" \
+                    --label io.dot.db.type=mariadb --network "$network" \
+                    -p "$(port_mapping "$database_host_port" 3306)" -e MARIADB_ROOT_PASSWORD="$root_password" \
+                    -e MARIADB_DATABASE=app -e MARIADB_USER=app -e MARIADB_PASSWORD="$app_password" \
+                    -v "$(db_volume "$name"):/var/lib/mysql:Z" docker.io/library/mariadb:11
+                ;;
+            mysql)
+                podman run -d --name "$container" --label io.dot.db.instance="$name" \
+                    --label io.dot.db.type=mysql --network "$network" \
+                    -p "$(port_mapping "$database_host_port" 3306)" -e MYSQL_ROOT_PASSWORD="$root_password" \
+                    -e MYSQL_DATABASE=app -e MYSQL_USER=app -e MYSQL_PASSWORD="$app_password" \
+                    -v "$(db_volume "$name"):/var/lib/mysql:Z" docker.io/library/mysql:8.4
+                ;;
+        esac
+        port=$(report_port "$container" "$([[ "$db_type" == postgres ]] && printf 5432 || printf 3306)")
+        printf '\nCreated and started %s instance "%s".\n' "$db_type" "$name"
+        printf 'Host connection: 127.0.0.1:%s  database=app  user=app\n' "${port##*:}"
+        printf 'Database password (app): %s\n' "$app_password"
+        printf 'Credentials: %s (mode 600)\n' "$credentials"
+        printf 'Podman network host: %s\n' "$container"
+        ;;
+    tool)
+        (( $# == 1 || $# == 2 || $# == 3 )) || { usage >&2; exit 2; }
+        tool=$1
+        require_podman
+        mkdir -p -- "$config_dir"
+        ensure_network
+        case "$tool" in
+            adminer)
+                (( $# == 1 || $# == 2 )) || { usage >&2; exit 2; }
+                web_host_port=${2:-8080}
+                validate_port "$web_host_port"
+                container=$(tool_container adminer)
+                podman container exists "$container" && die 'Adminer already exists.'
+                if ! podman run -d --name "$container" --network "$network" \
+                    --label io.dot.db.tool=adminer -p "127.0.0.1:${web_host_port}:8080" \
+                    docker.io/library/adminer:5; then
+                    podman rm -f "$container" >/dev/null 2>&1 || true
+                    die "Could not start Adminer on localhost port $web_host_port."
+                fi
+                printf 'Adminer is available at http://127.0.0.1:%s\n' "$web_host_port"
+                printf 'Use server names such as dot-db-myproject to connect over the Podman network.\n'
+                ;;
+            pgadmin)
+                (( $# == 2 || $# == 3 )) || { usage >&2; exit 2; }
+                name=$2
+                valid_name "$name" || die 'Invalid database instance name.'
+                db_type=$(existing_instance_type "$name")
+                [[ "$db_type" == postgres ]] || die "Instance $name is not a PostgreSQL container."
+                [[ $(podman inspect --format '{{.State.Running}}' "$(db_container "$name")") == true ]] || die "PostgreSQL instance $name is stopped. Start it with 'db-containers start $name'."
+                web_host_port=${3:-5050}
+                validate_port "$web_host_port"
+                container=$(tool_container pgadmin "$name")
+                podman container exists "$container" && die "pgAdmin already exists for $name."
+
+                pgadmin_dir="$config_dir/pgadmin/$name"
+                [[ ! -L "$pgadmin_dir" ]] || die "pgAdmin config path must not be a symlink: $pgadmin_dir"
+                mkdir -p -- "$pgadmin_dir"
+                pgadmin_volume="dot-pgadmin-${name}-data"
+                podman volume create "$pgadmin_volume" >/dev/null
+                pgadmin_password_file="$pgadmin_dir/password"
+                [[ ! -L "$pgadmin_password_file" ]] || die "pgAdmin password path must not be a symlink: $pgadmin_password_file"
+                if [[ ! -e "$pgadmin_password_file" ]]; then
+                    umask 077
+                    od -An -N24 -tx1 /dev/urandom | tr -d ' \n' > "$pgadmin_password_file"
+                fi
+                chmod 600 -- "$pgadmin_password_file"
+                pgadmin_password=$(cat -- "$pgadmin_password_file")
+                [[ "$pgadmin_password" =~ ^[[:xdigit:]]{48}$ ]] || die "Invalid pgAdmin password file: $pgadmin_password_file"
+
+                server_config="$pgadmin_dir/servers.json"
+                [[ ! -L "$server_config" ]] || die "pgAdmin server config must not be a symlink: $server_config"
+                if [[ ! -e "$server_config" ]]; then
+                    umask 077
+                    cat > "$server_config" <<EOF
+{
+  "Servers": {
+    "1": {
+      "Name": "${name}",
+      "Group": "Servers",
+      "Host": "$(db_container "$name")",
+      "Port": 5432,
+      "MaintenanceDB": "app",
+      "Username": "app",
+      "SSLMode": "prefer",
+      "SavePassword": false
+    }
+  }
+}
+EOF
+                fi
+                chmod 644 -- "$server_config"
+                if ! podman run -d --name "$container" --network "$network" \
+                    --label io.dot.db.tool=pgadmin --label io.dot.db.instance="$name" \
+                    -p "127.0.0.1:${web_host_port}:80" \
+                    -e PGADMIN_DEFAULT_EMAIL=admin@localhost -e PGADMIN_DEFAULT_PASSWORD="$pgadmin_password" \
+                    -v "$pgadmin_volume:/var/lib/pgadmin" \
+                    -v "$server_config:/pgadmin4/servers.json:ro,Z" \
+                    docker.io/dpage/pgadmin4:latest; then
+                    podman rm -f "$container" >/dev/null 2>&1 || true
+                    die "Could not start pgAdmin on localhost port $web_host_port. Choose a free web host port."
+                fi
+                printf 'pgAdmin for %s is available at http://127.0.0.1:%s\n' "$name" "$web_host_port"
+                printf 'Login: admin@localhost; password is stored in %s\n' "$pgadmin_password_file"
+                printf 'Configured server: %s (database app, user app); enter the database app password when prompted.\n' "$(db_container "$name")"
+                ;;
+            phpmyadmin)
+                (( $# == 2 || $# == 3 )) || { usage >&2; exit 2; }
+                name=$2
+                valid_name "$name" || die 'Invalid database instance name.'
+                db_type=$(existing_instance_type "$name")
+                [[ "$db_type" == mariadb || "$db_type" == mysql ]] || die "Instance $name is not a running MariaDB or MySQL container."
+                web_host_port=${3:-8080}
+                validate_port "$web_host_port"
+                container=$(tool_container phpmyadmin "$name")
+                podman container exists "$container" && die "phpMyAdmin already exists for $name."
+                if ! podman run -d --name "$container" --network "$network" \
+                    --label io.dot.db.tool=phpmyadmin --label io.dot.db.instance="$name" \
+                    -p "127.0.0.1:${web_host_port}:80" -e PMA_HOST="$(db_container "$name")" \
+                    docker.io/library/phpmyadmin:5; then
+                    podman rm -f "$container" >/dev/null 2>&1 || true
+                    die "Could not start phpMyAdmin on localhost port $web_host_port. Choose a free web host port."
+                fi
+                printf 'phpMyAdmin for %s is available at http://127.0.0.1:%s\n' "$name" "$web_host_port"
+                ;;
+            *) usage >&2; exit 2 ;;
+        esac
+        ;;
+    start|stop|status)
+        (( $# == 1 )) || { usage >&2; exit 2; }
+        name=$1
+        require_podman
+        if [[ "$name" == all ]]; then
+            if [[ "$action" == status ]]; then
+                podman ps -a --filter label=io.dot.db.type --format '{{.Names}}  {{.Status}}  {{.Ports}}'
+            else
+                mapfile -t containers < <(podman ps -aq --filter label=io.dot.db.type)
+                if ((${#containers[@]})); then podman "$action" "${containers[@]}"
+                else printf 'No database containers to %s.\n' "$action"; fi
+            fi
+            exit 0
+        fi
+        valid_name "$name" || die 'Invalid instance name.'
+        container=$(db_container "$name")
+        podman container exists "$container" || die "No database instance named $name. Use 'db-containers list'."
+        case "$action" in
+            start) podman start "$container" ;;
+            stop) podman stop "$container" ;;
+            status) podman ps -a --filter "name=^${container}$" --format '{{.Names}}  {{.Status}}  {{.Ports}}' ;;
+        esac
+        ;;
+    remove)
+        (( $# == 1 )) || { usage >&2; exit 2; }
+        name=$1
+        valid_name "$name" || die 'Invalid instance name.'
+        require_podman
+        container=$(db_container "$name")
+        podman container exists "$container" || die "No database instance named $name."
+        type=$(existing_instance_type "$name")
+        [[ "$type" == postgres || "$type" == mariadb || "$type" == mysql ]] || die "Refusing to remove unrecognized container $container."
+        podman rm -f "$container"
+        printf 'Removed container %s. Data volume %s and credentials were preserved.\n' "$container" "$(db_volume "$name")"
+        ;;
+    *) usage >&2; exit 2 ;;
+esac
